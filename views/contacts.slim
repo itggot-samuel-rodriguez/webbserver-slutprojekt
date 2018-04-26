@@ -1,0 +1,10 @@
+form class="logout" method="POST" action="/logout"
+    input type="submit" value="logout"
+
+a href="/create" Create
+-contacts.each do |contact|
+    div class="block"
+        p class="contact" #{contact[2]}
+        form method="POST" action="/delete/#{contact[0]}"
+            input type="submit" value="delete"
+        a href="/update/#{contact[0]}" update
