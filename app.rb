@@ -1,33 +1,26 @@
 class App < Sinatra::Base
 	enable :sessions
-
-
-
-	# a href -> get -> html ->  form -> post /action -> redirect -> get
-
+	
 
 	get '/' do
-		slim(:index) # index.slim
+		slim(:index)
 	end
 
-	post '/login' do # Fångar in formuläret från index.slim 
-		db = SQLite3::Database.new("db/Contact_list.sqlite") #Länka SQLITE
-		username = params["username"] # Hämtad från register.slim, input med name="username"
+	post '/login' do 
+		db = SQLite3::Database.new("db/Contact_list.sqlite") 
+		username = params["username"] 
 		password = params["password"]
-		password_crypted = db.execute("SELECT password_digest FROM accounts WHERE username=?", username) #Kryptera lösenord till databasen
+		password_crypted = db.execute("SELECT password_digest FROM accounts WHERE username=?", username)
 		if password_crypted == []
-			password_digest = nil
+			session[:message] = "User does not exist"
+			redirect("/error")
 		else
-			password_crypted = password_crypted[0][0] # första värdet, kollar på username, andra värden är password
-			byebug
-			password_digest = BCrypt::Password.new(password_crypted) # "Dekryptar"
+			password_crypted = password_crypted[0][0] 
+			password_digest = BCrypt::Password.new(password_crypted) 
 		end
-		if password_digest == password # om lösenordet matchar
-			result = db.execute("SELECT id FROM accounts WHERE username=?", [username]) #Hämta ID från konton
-			session[:id] = result[0][0] # id
-			session[:login] = true # Är inloggad
-		else
-			session[:login] = false # Är INTE inloggad
+		if password_digest == password
+			result = db.execute("SELECT id FROM accounts WHERE username=?", [username]) 
+			session[:id] = result[0][0] 
 		end
 		redirect('/contacts')
 	end
@@ -37,31 +30,32 @@ class App < Sinatra::Base
 	end
 
 	get '/contacts' do
-		db = SQLite3::Database.new("db/Contact_list.sqlite") #Länka SQLITE
-		if session[:login] == true #Om man har loggat in
-			contact = db.execute("SELECT * FROM contacts WHERE account_id=?", session[:id].to_i)
-			slim(:contacts, locals:{contacts:contact}) #contacts.slim, tar variablen "contact" till contacts.slim.
+		db = SQLite3::Database.new("db/Contact_list.sqlite")
+		if session[:id] 
+			id=session[:id].to_i
+			contacts = db.execute("SELECT id,username FROM accounts WHERE id IN (SELECT user2_id FROM contacts WHERE user1_id = ?) OR id IN (SELECT user1_id FROM contacts WHERE user2_id = ?)",[id,id])
+			slim(:contacts, locals:{contacts:contacts})
 		else
 			session[:message] = "You are not logged in"
-			redirect("/error")# error.slim och skickar en variable "msg" till slim, variablen är session[:message]
+			redirect("/error")
 		end
 	end
 
 	get '/register' do
-		slim(:register) # register.slim
+		slim(:register)
 	end
 
 	post '/register' do
-		db = SQLite3::Database.new("db/Contact_list.sqlite") #Länka SQLITE
-		username = params["username"]  # Hämtad från register.slim, input med name="username"
+		db = SQLite3::Database.new("db/Contact_list.sqlite")
+		username = params["username"] 
 		password = params["password"]
 		confirm = params["password2"]
 		if confirm == password
 			begin
-				password_digest = BCrypt::Password.create(password) #Kryptera
-				db.execute("INSERT INTO accounts(username, password_digest) VALUES(? , ?) ", [username, password_digest]) #Stoppa in i databasen
-				redirect('/') #a href="/"
-			rescue SQLite3::ConstraintException #Rescue om username redan finns
+				password_digest = BCrypt::Password.create(password)
+				db.execute("INSERT INTO accounts(username, password_digest) VALUES(? , ?) ", [username, password_digest])
+				redirect('/')
+			rescue SQLite3::ConstraintException 
 				session[:message] = "Username is not available"
 				redirect("/error")
 			end
@@ -72,12 +66,16 @@ class App < Sinatra::Base
 	end
 
 	post '/create' do
+		unless session[:id]
+			session[:message] = "You are not logged in"
+			redirect("/error")
+		end
 		db = SQLite3::Database.new("db/Contact_list.sqlite")
 		content = params["content"]
 		begin
-			db.execute("INSERT INTO contacts(account_id,msg) VALUES(?,?)", [session[:id],content])
-		rescue SQLite3::ConstraintException # Någon anledning kan skapa contacts utan att logga in. fixar bugfix
-			session[:message] = "You are not logged in"
+			db.execute("INSERT INTO contacts(user1_id,user2_id) VALUES((SELECT id FROM accounts WHERE username = ?),?)", [content,session[:id]])
+		rescue SQLite3::ConstraintException 
+			session[:message] = "Username does not exist"
 			redirect("/error")
 		end
 		redirect('/contacts')
@@ -85,19 +83,20 @@ class App < Sinatra::Base
 
 	post '/delete/:id' do
 		db = SQLite3::Database.new("db/Contact_list.sqlite")
-		id = params[:id]
-		db.execute("DELETE FROM contacts WHERE id=?",id)
+		id1 = params[:id]
+		id2 = session[:id]
+		db.execute("DELETE FROM contacts WHERE (user1_id=? AND user2_id=?) OR (user2_id=? AND user1_id=?)", [id1, id2, id2, id1])
 		redirect('/contacts')
 	end
 
 	get '/update/:id' do
 		db = SQLite3::Database.new("db/Contact_list.sqlite")
-		id = params[:id] # Hämtar från routen på "get '/update/{:id}'"
+		id = params[:id] 
 		result = db.execute("SELECT * FROM contacts WHERE id=?", id)
-		if result[0][1].to_i == session[:id].to_i #Om man ändrar på route så kan man inte gå in i andras kontons contacts och ändra. så den ger en check om du har tillgång till contact innan du kan uppdatera
+		if result[0][1].to_i == session[:id].to_i 
 			slim(:update, locals:{result:result})
 		else
-			session[:message] = "Forbidden"	#Om du inte har tillgång, redirect till error som ger texten "Forbidden"
+			session[:message] = "Forbidden"	
 			redirect("/error")
 		end
 	end
@@ -110,7 +109,7 @@ class App < Sinatra::Base
 		redirect('/contacts')
 	end
 
-	post '/logout' do #Loggar ut och tar bort sessions
+	post '/logout' do 
 		session[:login] = false
 		session[:id] = nil
 		redirect('/')

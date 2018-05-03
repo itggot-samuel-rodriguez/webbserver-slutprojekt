@@ -10,7 +10,7 @@ body {
 header {
     height: 10vh;
     width: 100vw;
-    background-color: whitesmoke;
+    background-color: rgba(182, 67, 172, 0.774);
 }
 
 .contact {
@@ -51,4 +51,10 @@ header {
     position: absolute; 
     top: 0
     
+}
+
+#contact_list {
+    padding: 20px;
+    color: white;
+
 }
