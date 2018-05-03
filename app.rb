@@ -1,6 +1,6 @@
 class App < Sinatra::Base
 	enable :sessions
-	
+
 
 	get '/' do
 		slim(:index)
@@ -86,26 +86,6 @@ class App < Sinatra::Base
 		id1 = params[:id]
 		id2 = session[:id]
 		db.execute("DELETE FROM contacts WHERE (user1_id=? AND user2_id=?) OR (user2_id=? AND user1_id=?)", [id1, id2, id2, id1])
-		redirect('/contacts')
-	end
-
-	get '/update/:id' do
-		db = SQLite3::Database.new("db/Contact_list.sqlite")
-		id = params[:id] 
-		result = db.execute("SELECT * FROM contacts WHERE id=?", id)
-		if result[0][1].to_i == session[:id].to_i 
-			slim(:update, locals:{result:result})
-		else
-			session[:message] = "Forbidden"	
-			redirect("/error")
-		end
-	end
-
-	post '/update/:id' do
-		db = SQLite3::Database.new("db/Contact_list.sqlite")
-		id = params[:id].to_i
-		new_contact = params["content"]
-		db.execute("UPDATE contacts SET msg=? WHERE id=?", [new_contact, id])
 		redirect('/contacts')
 	end
 
